@@ -62,7 +62,7 @@ class JournalController extends Controller
         return redirect()->route('journal.show', $entry->id);
     }
 
-    public function show(JournalEntry $journal): Response
+    public function show(Request $request, JournalEntry $journal): Response
     {
         $this->authorize('view', $journal);
 

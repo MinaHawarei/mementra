@@ -22,7 +22,7 @@ class DashboardController extends Controller
 
         $activeRelationship = $user->relationships()
             ->with('members')
-            ->where('status', 'active')
+            ->where('status', \App\Enums\RelationshipStatus::Active)
             ->first();
 
         $recentEntries = $user->journalEntries()

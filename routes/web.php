@@ -44,4 +44,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('settings/preferences', [UserSettingsController::class, 'updatePreferences'])->name('settings.preferences.update');
 });
 
+Route::post('locale/{locale}', function (string $locale) {
+    if (! in_array($locale, ['en', 'ar'])) {
+        abort(400);
+    }
+
+    session(['locale' => $locale]);
+
+    if (auth()->check()) {
+        auth()->user()->update(['locale' => $locale]);
+    }
+
+    return back();
+})->name('locale.switch');
+
 require __DIR__.'/settings.php';
