@@ -43,6 +43,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        ini_set('upload_max_filesize', '20M');
+        ini_set('post_max_size', '20M');
     }
 
     /**
