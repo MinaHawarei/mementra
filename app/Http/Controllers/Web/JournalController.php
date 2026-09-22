@@ -69,8 +69,17 @@ class JournalController extends Controller
         $relationship = $request->user()->activeRelationship();
         $partner = $relationship?->partnerFor($request->user());
 
+        $journal->load(['owner', 'blocks', 'media', 'shares.targetUser', 'shares.relationship', 'reminders']);
+        $entry = (new JournalEntryResource($journal))->resolve();
+
+        foreach (['blocks', 'media', 'reminders', 'shares'] as $key) {
+            if (isset($entry[$key]['data'])) {
+                $entry[$key] = $entry[$key]['data'];
+            }
+        }
+
         return Inertia::render('journal/show', [
-            'entry' => (new JournalEntryResource($journal->load(['owner', 'blocks', 'media', 'shares.targetUser', 'shares.relationship', 'reminders'])))->resolve(),
+            'entry' => $entry,
             'partner' => $partner ? ['id' => $partner->id, 'name' => $partner->name] : null,
         ]);
     }
@@ -100,9 +109,20 @@ class JournalController extends Controller
     {
         $this->authorize('update', $journal);
 
-        return Inertia::render('journal/edit', [
-            'entry' => (new JournalEntryResource($journal->load(['blocks', 'media'])))->resolve(),
-        ]);
+        $journal->load(['blocks', 'media']);
+
+        $entry = (new JournalEntryResource($journal))->resolve();
+
+        // ResourceCollection wraps relations under a "data" key when resolved
+        // outside a real HTTP response. Normalize to plain arrays for Inertia.
+        if (isset($entry['blocks']['data'])) {
+            $entry['blocks'] = $entry['blocks']['data'];
+        }
+        if (isset($entry['media']['data'])) {
+            $entry['media'] = $entry['media']['data'];
+        }
+
+        return Inertia::render('journal/edit', ['entry' => $entry]);
     }
 
     public function update(UpdateJournalEntryRequest $request, JournalEntry $journal): RedirectResponse

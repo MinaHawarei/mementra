@@ -40,7 +40,7 @@ export function UserMenuContent({ user }: Props) {
                         prefetch
                         onClick={cleanup}
                     >
-                        <Settings className="mr-2" />
+                        <Settings className="me-2" />
                         Settings
                     </Link>
                 </DropdownMenuItem>
@@ -54,7 +54,7 @@ export function UserMenuContent({ user }: Props) {
                     onClick={handleLogout}
                     data-test="logout-button"
                 >
-                    <LogOut className="mr-2" />
+                    <LogOut className="me-2" />
                     Log out
                 </Link>
             </DropdownMenuItem>

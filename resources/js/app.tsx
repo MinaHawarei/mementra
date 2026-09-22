@@ -1,4 +1,4 @@
-import { createInertiaApp } from '@inertiajs/react';
+import { createInertiaApp, router } from '@inertiajs/react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
@@ -32,9 +32,18 @@ createInertiaApp({
         );
     },
     progress: {
-        color: '#4B5563',
+        color: '#6366f1',
     },
 });
 
-// This will set light / dark mode on load...
+// Set light / dark mode on load...
 initializeTheme();
+
+// Synchronize document direction and language on client-side navigation
+router.on('navigate', (event) => {
+    const userLocale = (event.detail.page.props as any)?.auth?.user?.locale;
+    if (userLocale) {
+        document.documentElement.dir = userLocale === 'ar' ? 'rtl' : 'ltr';
+        document.documentElement.lang = userLocale;
+    }
+});
