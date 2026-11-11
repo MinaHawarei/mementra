@@ -12,7 +12,9 @@ export default function AppLayout({
     const resolvedBreadcrumbs: BreadcrumbItem[] =
         breadcrumbs && breadcrumbs.length > 0
             ? breadcrumbs
-            : (children as any)?.type?.layout?.breadcrumbs || [];
+            : (children as any)?.type?.layout?.breadcrumbs ||
+              (children as any)?.props?.children?.type?.layout?.breadcrumbs ||
+              [];
 
     return (
         <AppLayoutTemplate breadcrumbs={resolvedBreadcrumbs}>

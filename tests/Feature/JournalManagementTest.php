@@ -214,4 +214,3 @@ test('string content_json or content is normalized into array structure', functi
     $block = $entry->blocks->first();
     expect($block->content_json)->toBe(['text' => 'Simple string content']);
 });
-

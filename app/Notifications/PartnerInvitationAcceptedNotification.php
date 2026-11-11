@@ -40,4 +40,3 @@ class PartnerInvitationAcceptedNotification extends Notification
         ];
     }
 }
-

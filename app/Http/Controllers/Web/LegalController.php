@@ -28,4 +28,3 @@ class LegalController extends Controller
         ]);
     }
 }
-
