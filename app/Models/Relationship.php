@@ -52,4 +52,9 @@ class Relationship extends Model
     {
         return $this->hasMany(Event::class);
     }
+
+    public function partnerFor(User $user): ?User
+    {
+        return $this->members->firstWhere('id', '!==', $user->id);
+    }
 }

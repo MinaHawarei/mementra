@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\EventController;
 use App\Http\Controllers\Web\ExportController;
 use App\Http\Controllers\Web\JournalController;
+use App\Http\Controllers\Web\LegalController;
 use App\Http\Controllers\Web\MediaController;
 use App\Http\Controllers\Web\MemoriesController;
 use App\Http\Controllers\Web\RelationshipController;
@@ -14,6 +16,12 @@ use App\Http\Controllers\Web\UserSettingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
+
+Route::get('privacy-policy', [LegalController::class, 'privacyPolicy'])->name('legal.privacy-policy');
+Route::get('terms', [LegalController::class, 'terms'])->name('legal.terms');
+
+Route::get('auth/google/redirect', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
+Route::get('auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
@@ -29,6 +37,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('memories', [MemoriesController::class, 'index'])->name('memories.index');
     Route::get('media/{media}/file', [MediaController::class, 'show'])->name('media.show');
+    Route::get('media/{media}/download', [MediaController::class, 'download'])->name('media.download');
+    Route::post('media/{media}/save-to-drive', [MediaController::class, 'saveToDrive'])->name('media.save-to-drive');
+    Route::get('saved-media/{savedMedia}/file', [MediaController::class, 'showSaved'])->name('saved-media.show');
+    Route::get('saved-media/{savedMedia}/download', [MediaController::class, 'downloadSaved'])->name('saved-media.download');
 
     Route::get('timeline', [TimelineController::class, 'index'])->name('timeline.index');
 

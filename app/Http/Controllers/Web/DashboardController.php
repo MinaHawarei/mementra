@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Enums\RelationshipStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\EventResource;
 use App\Http\Resources\Api\V1\JournalEntryResource;
@@ -22,7 +23,7 @@ class DashboardController extends Controller
 
         $activeRelationship = $user->relationships()
             ->with('members')
-            ->where('status', \App\Enums\RelationshipStatus::Active)
+            ->where('status', RelationshipStatus::Active)
             ->first();
 
         $recentEntries = $user->journalEntries()

@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'google_drive' => [
+        'client_id' => env('GOOGLE_DRIVE_CLIENT_ID') ?: env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_DRIVE_CLIENT_SECRET') ?: env('GOOGLE_CLIENT_SECRET'),
+        'redirect_uri' => env('GOOGLE_DRIVE_REDIRECT_URI') ?: (env('APP_URL') ? rtrim((string) env('APP_URL'), '/').'/integrations/google-drive/callback' : null),
+        'auth_redirect_uri' => env('GOOGLE_AUTH_REDIRECT_URI') ?: (env('APP_URL') ? rtrim((string) env('APP_URL'), '/').'/auth/google/callback' : null),
+        'folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),
+    ],
+
 ];

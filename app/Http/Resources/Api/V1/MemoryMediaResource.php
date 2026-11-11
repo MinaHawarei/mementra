@@ -9,6 +9,8 @@ class MemoryMediaResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+
         return [
             'id' => $this->id,
             'type' => $this->type?->value ?? $this->type,
@@ -20,6 +22,10 @@ class MemoryMediaResource extends JsonResource
             'width' => $this->width,
             'height' => $this->height,
             'sort_order' => $this->sort_order,
+            'url' => route('media.show', $this->id),
+            'download_url' => route('media.download', $this->id),
+            'is_owner' => $user ? $this->user_id === $user->id : false,
+            'user_id' => $this->user_id,
             'journal_entry_id' => $this->journal_entry_id,
             'journal_entry' => $this->when(
                 $this->relationLoaded('journalEntry') && $this->journalEntry,

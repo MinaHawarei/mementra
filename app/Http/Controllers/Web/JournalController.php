@@ -9,6 +9,7 @@ use App\Http\Requests\Api\V1\StoreJournalEntryRequest;
 use App\Http\Requests\Api\V1\UpdateJournalEntryRequest;
 use App\Http\Resources\Api\V1\JournalEntryResource;
 use App\Models\JournalEntry;
+use App\Models\SavedMedia;
 use App\Services\JournalEntryService;
 use App\Services\ReminderService;
 use App\Services\TimelineService;
@@ -78,9 +79,16 @@ class JournalController extends Controller
             }
         }
 
+        $savedMediaIds = SavedMedia::where('user_id', $request->user()->id)
+            ->whereIn('original_media_id', $journal->media->pluck('id'))
+            ->pluck('original_media_id')
+            ->values();
+
         return Inertia::render('journal/show', [
             'entry' => $entry,
             'partner' => $partner ? ['id' => $partner->id, 'name' => $partner->name] : null,
+            'hasGoogleDrive' => (bool) $request->user()->googleDriveConnection,
+            'savedMediaIds' => $savedMediaIds,
         ]);
     }
 
@@ -129,7 +137,7 @@ class JournalController extends Controller
     {
         $this->authorize('update', $journal);
 
-        $this->service->updateEntry($journal, $request->validated());
+        $this->service->updateEntry($journal, $request->validated(), $request->user());
 
         return redirect()->route('journal.show', $journal->id);
     }

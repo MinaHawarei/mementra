@@ -1,5 +1,5 @@
-﻿import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, Bell, Calendar, Edit, Lock, MapPin, Share2, Smile, Trash, X, Sparkles, Image as ImageIcon } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { ArrowLeft, Bell, Calendar, Edit, Lock, MapPin, Share2, Smile, Trash, X, Sparkles, Image as ImageIcon, Download, Cloud, Check, Loader2, ImageOff } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,10 @@ import { Label } from '@/components/ui/label';
 interface MediaItem {
     id: number;
     original_filename: string;
+    url?: string;
+    download_url?: string;
+    is_owner?: boolean;
+    user_id?: number;
 }
 
 interface ReminderItem {
@@ -41,6 +45,8 @@ interface JournalShowProps {
         reminders?: ReminderItem[];
     };
     partner?: { id: number; name: string } | null;
+    hasGoogleDrive?: boolean;
+    savedMediaIds?: number[];
 }
 
 const moodEmojis: Record<string, { emoji: string; label: string; badge: string }> = {
@@ -54,9 +60,13 @@ const moodEmojis: Record<string, { emoji: string; label: string; badge: string }
     sad: { emoji: '🌧️', label: 'Reflective', badge: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20' },
 };
 
-export default function JournalShow({ entry, partner }: JournalShowProps) {
+export default function JournalShow({ entry, partner, hasGoogleDrive = false, savedMediaIds = [] }: JournalShowProps) {
     const [showRememberModal, setShowRememberModal] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
+    const [savingMediaId, setSavingMediaId] = useState<number | null>(null);
+    const [savedList, setSavedList] = useState<number[]>(savedMediaIds);
+    const [previewMedia, setPreviewMedia] = useState<MediaItem | null>(null);
+    const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
     const [remindAt, setRemindAt] = useState(
         new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
     );
@@ -68,6 +78,39 @@ export default function JournalShow({ entry, partner }: JournalShowProps) {
 
     const moodKey = entry.mood ? entry.mood.toLowerCase() : '';
     const mood = moodEmojis[moodKey];
+
+    const handleSaveToDrive = (media: MediaItem, e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        if (!hasGoogleDrive) {
+            if (confirm('You need to connect your personal Google Drive account first. Go to Settings -> Integrations now?')) {
+                router.get('/settings/integrations');
+            }
+            return;
+        }
+
+        setSavingMediaId(media.id);
+        router.post(
+            `/media/${media.id}/save-to-drive`,
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setSavedList((prev) => [...prev, media.id]);
+                },
+                onFinish: () => {
+                    setSavingMediaId(null);
+                },
+            }
+        );
+    };
+
+    const handleDownload = (media: MediaItem, e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        window.open(media.download_url || `/media/${media.id}/download`, '_blank');
+    };
 
     const handleDelete = () => {
         if (confirm('Are you sure you wish to delete this cherished memory? This action cannot be undone.')) {
@@ -350,18 +393,75 @@ export default function JournalShow({ entry, partner }: JournalShowProps) {
                                 <span>Attached Photos ({entry.media.length})</span>
                             </h3>
                             <div className="grid gap-4 grid-cols-2 sm:grid-cols-3">
-                                {entry.media.map((m) => (
-                                    <div
-                                        key={m.id}
-                                        className="group relative aspect-square rounded-2xl overflow-hidden border border-border bg-muted shadow-xs"
-                                    >
-                                        <img
-                                            src={`/media/${m.id}/file`}
-                                            alt={m.original_filename}
-                                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                        />
-                                    </div>
-                                ))}
+                                {entry.media.map((m) => {
+                                    const isSaved = savedList.includes(m.id);
+                                    const isSaving = savingMediaId === m.id;
+                                    const hasError = imageErrors[m.id];
+                                    const mediaUrl = m.url || `/media/${m.id}/file`;
+
+                                    return (
+                                        <div
+                                            key={m.id}
+                                            onClick={() => !hasError && setPreviewMedia(m)}
+                                            className="group relative aspect-square rounded-2xl overflow-hidden border border-border bg-muted shadow-xs transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+                                        >
+                                            {hasError ? (
+                                                <div className="flex h-full w-full flex-col items-center justify-center bg-muted/50 p-2 text-center text-muted-foreground">
+                                                    <ImageOff className="h-6 w-6 mb-1 text-muted-foreground/60" />
+                                                    <span className="text-[10px] truncate max-w-[90%]">{m.original_filename}</span>
+                                                </div>
+                                            ) : (
+                                                <img
+                                                    src={mediaUrl}
+                                                    alt={m.original_filename}
+                                                    loading="lazy"
+                                                    onError={() => setImageErrors((prev) => ({ ...prev, [m.id]: true }))}
+                                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                />
+                                            )}
+
+                                            {/* Action buttons overlay */}
+                                            <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => handleDownload(m, e)}
+                                                    title="Download photo"
+                                                    className="h-7 w-7 rounded-full bg-black/75 hover:bg-black text-white flex items-center justify-center shadow-xs transition-transform active:scale-95"
+                                                >
+                                                    <Download className="h-3.5 w-3.5" />
+                                                </button>
+
+                                                {!m.is_owner && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => handleSaveToDrive(m, e)}
+                                                        disabled={isSaved || isSaving}
+                                                        title={isSaved ? 'Saved in My Drive' : 'Save copy to My Drive'}
+                                                        className={`h-7 px-2 rounded-full text-[10px] font-medium flex items-center gap-1 shadow-xs transition-all active:scale-95 ${
+                                                            isSaved
+                                                                ? 'bg-emerald-600 text-white'
+                                                                : 'bg-black/75 hover:bg-black text-white'
+                                                        }`}
+                                                    >
+                                                        {isSaving ? (
+                                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                                        ) : isSaved ? (
+                                                            <>
+                                                                <Check className="h-3 w-3" />
+                                                                <span>Saved</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Cloud className="h-3 w-3" />
+                                                                <span>Save</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
@@ -424,6 +524,71 @@ export default function JournalShow({ entry, partner }: JournalShowProps) {
                     )}
                 </article>
             </div>
+
+            {/* Media Lightbox / Preview Dialog */}
+            {previewMedia && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-xs"
+                    onClick={() => setPreviewMedia(null)}
+                >
+                    <div
+                        className="relative max-w-4xl max-h-[90vh] flex flex-col items-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setPreviewMedia(null)}
+                            className="absolute -top-10 right-0 text-white hover:text-white/80"
+                        >
+                            <X className="h-6 w-6" />
+                        </button>
+
+                        <img
+                            src={previewMedia.url || `/media/${previewMedia.id}/file`}
+                            alt={previewMedia.original_filename}
+                            className="max-h-[80vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/10"
+                        />
+
+                        <div className="mt-3 flex items-center justify-between w-full text-white text-xs px-2">
+                            <span className="truncate max-w-xs">{previewMedia.original_filename}</span>
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => handleDownload(previewMedia, e)}
+                                    className="h-8 text-xs bg-white/10 hover:bg-white/20 text-white border-white/20 gap-1.5"
+                                >
+                                    <Download className="h-3.5 w-3.5" />
+                                    <span>Download</span>
+                                </Button>
+
+                                {!previewMedia.is_owner && (
+                                    <Button
+                                        size="sm"
+                                        onClick={(e) => handleSaveToDrive(previewMedia, e)}
+                                        disabled={savedList.includes(previewMedia.id) || savingMediaId === previewMedia.id}
+                                        className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+                                    >
+                                        {savingMediaId === previewMedia.id ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : savedList.includes(previewMedia.id) ? (
+                                            <>
+                                                <Check className="h-3.5 w-3.5" />
+                                                <span>Saved in My Drive</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Cloud className="h-3.5 w-3.5" />
+                                                <span>Save to My Drive</span>
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

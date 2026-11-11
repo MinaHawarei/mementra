@@ -97,6 +97,16 @@ export default function AuthSplitLayout({
                     <div className="rounded-2xl border border-border/60 bg-card p-6 sm:p-8 shadow-sm">
                         {children}
                     </div>
+
+                    <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
+                        <Link href="/privacy-policy" className="hover:text-foreground transition-colors">
+                            Privacy Policy
+                        </Link>
+                        <span>&bull;</span>
+                        <Link href="/terms" className="hover:text-foreground transition-colors">
+                            Terms of Service
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>

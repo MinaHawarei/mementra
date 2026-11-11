@@ -5,12 +5,14 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\Locale;
 use App\Enums\RelationshipStatus;
+use App\Enums\StorageConnectionStatus;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -33,7 +35,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'locale', 'timezone', 'password'])]
+#[Fillable(['name', 'email', 'google_id', 'google_avatar', 'locale', 'timezone', 'password', 'email_verified_at'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
@@ -92,5 +94,22 @@ class User extends Authenticatable implements PasskeyUser
     public function timelineEvents(): HasMany
     {
         return $this->hasMany(TimelineEvent::class);
+    }
+
+    public function storageConnections(): HasMany
+    {
+        return $this->hasMany(StorageConnection::class);
+    }
+
+    public function googleDriveConnection(): HasOne
+    {
+        return $this->hasOne(StorageConnection::class)
+            ->where('provider', 'google_drive')
+            ->where('status', StorageConnectionStatus::Connected);
+    }
+
+    public function savedMedia(): HasMany
+    {
+        return $this->hasMany(SavedMedia::class);
     }
 }

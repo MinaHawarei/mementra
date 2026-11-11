@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\GoogleDriveIntegrationController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -10,6 +11,12 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+    Route::get('settings/integrations', [GoogleDriveIntegrationController::class, 'index'])->name('integrations.index');
+    Route::get('integrations/google-drive/redirect', [GoogleDriveIntegrationController::class, 'redirect'])->name('integrations.google-drive.redirect');
+    Route::get('integrations/google-drive/callback', [GoogleDriveIntegrationController::class, 'callback'])->name('integrations.google-drive.callback');
+    Route::delete('integrations/google-drive/disconnect', [GoogleDriveIntegrationController::class, 'disconnect'])->name('integrations.google-drive.disconnect');
+    Route::post('integrations/google-drive/test', [GoogleDriveIntegrationController::class, 'testConnection'])->name('integrations.google-drive.test');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {

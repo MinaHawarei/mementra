@@ -54,9 +54,9 @@ class JournalEntryService
         });
     }
 
-    public function updateEntry(JournalEntry $entry, array $data): JournalEntry
+    public function updateEntry(JournalEntry $entry, array $data, ?User $uploader = null): JournalEntry
     {
-        return DB::transaction(function () use ($entry, $data) {
+        return DB::transaction(function () use ($entry, $data, $uploader) {
             $entry->update(array_filter([
                 'title' => $data['title'] ?? null,
                 'entry_date' => $data['entry_date'] ?? null,
@@ -76,15 +76,16 @@ class JournalEntryService
                         'type' => $blockData['type'] ?? BlockType::Text->value,
                         'position' => $index,
                         'content_json' => $blockData['content_json'] ?? null,
-                        'created_by' => $blockData['created_by'] ?? $entry->user_id,
+                        'created_by' => $blockData['created_by'] ?? ($uploader?->id ?? $entry->user_id),
                     ]);
                 }
             }
 
             if (! empty($data['images']) && is_array($data['images'])) {
+                $actualUploader = $uploader ?? $entry->owner;
                 foreach ($data['images'] as $imageFile) {
                     if ($imageFile instanceof UploadedFile) {
-                        $this->mediaService->uploadMedia($entry->owner, $imageFile, $entry->id);
+                        $this->mediaService->uploadMedia($actualUploader, $imageFile, $entry->id);
                     }
                 }
             }

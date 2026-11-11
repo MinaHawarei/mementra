@@ -172,7 +172,9 @@ export default function Welcome() {
                             <span className="font-semibold text-foreground">Mementra</span>
                             <span>&copy; {new Date().getFullYear()} All rights reserved.</span>
                         </div>
-                        <div className="flex gap-6">
+                        <div className="flex flex-wrap items-center gap-6">
+                            <Link href="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+                            <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
                             <Link href={login()} className="hover:text-foreground transition-colors">Sign In</Link>
                             <Link href={register()} className="hover:text-foreground transition-colors">Create Account</Link>
                         </div>

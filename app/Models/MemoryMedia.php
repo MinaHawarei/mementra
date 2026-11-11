@@ -6,6 +6,7 @@ use App\Enums\MediaType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class MemoryMedia extends Model
@@ -17,6 +18,7 @@ class MemoryMedia extends Model
     protected $fillable = [
         'user_id',
         'journal_entry_id',
+        'storage_connection_id',
         'type',
         'storage_provider',
         'provider_file_id',
@@ -49,5 +51,30 @@ class MemoryMedia extends Model
     public function journalEntry(): BelongsTo
     {
         return $this->belongsTo(JournalEntry::class);
+    }
+
+    public function storageConnection(): BelongsTo
+    {
+        return $this->belongsTo(StorageConnection::class);
+    }
+
+    public function savedCopies(): HasMany
+    {
+        return $this->hasMany(SavedMedia::class, 'original_media_id');
+    }
+
+    public function getUrlAttribute(): string
+    {
+        return route('media.show', $this->id);
+    }
+
+    public function getDownloadUrlAttribute(): string
+    {
+        return route('media.download', $this->id);
+    }
+
+    public function isStoredInDrive(): bool
+    {
+        return $this->storage_provider === 'google_drive';
     }
 }

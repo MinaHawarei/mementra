@@ -4,9 +4,12 @@ namespace App\Providers;
 
 use App\Services\Export\ExportServiceInterface;
 use App\Services\Export\PdfExportService;
+use App\Services\MediaService;
 use App\Services\Storage\GoogleDriveMediaStorage;
 use App\Services\Storage\LocalTestMediaStorage;
 use App\Services\Storage\MediaStorageInterface;
+use App\Services\Storage\StorageManager;
+use App\Services\Storage\StorageResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +23,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(StorageResolver::class);
+        $this->app->singleton(StorageManager::class);
+
+        $this->app->bind(MediaService::class, function ($app) {
+            return new MediaService($app->make(StorageManager::class));
+        });
+
+        $this->app->singleton(StorageResolver::class);
+        $this->app->singleton(StorageManager::class);
+
+        $this->app->bind(MediaService::class, function ($app) {
+            return new MediaService($app->make(StorageManager::class));
+        });
+
         $this->app->bind(
             MediaStorageInterface::class,
             function () {

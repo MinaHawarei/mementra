@@ -1,11 +1,13 @@
-﻿import { Head, Link, usePage } from '@inertiajs/react';
-import { BookOpen, Calendar, Clock, Heart, Images, Sparkles, MapPin } from 'lucide-react';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { BookOpen, Calendar, Clock, Heart, Images, Sparkles, MapPin, ImageOff } from 'lucide-react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface MediaItem {
     id: number;
     original_filename: string;
     mime_type: string;
+    url?: string;
 }
 
 interface TimelineEvent {
@@ -31,6 +33,7 @@ interface TimelineIndexProps {
 }
 
 export default function TimelineIndex({ events }: TimelineIndexProps) {
+    const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
     const items = events?.data ?? [];
     const { props } = usePage();
     const locale = (props as { auth?: { user?: { locale?: string } } })?.auth?.user?.locale;
@@ -112,11 +115,18 @@ export default function TimelineIndex({ events }: TimelineIndexProps) {
                                             <div className="flex gap-2 overflow-x-auto pt-1">
                                                 {evt.media.slice(0, 4).map((m) => (
                                                     <div key={m.id} className="h-16 w-16 rounded-xl overflow-hidden shrink-0 border border-border bg-muted shadow-xs">
-                                                        <img
-                                                            src={`/media/${m.id}/file`}
-                                                            alt={m.original_filename}
-                                                            className="h-full w-full object-cover"
-                                                        />
+                                                        {imageErrors[m.id] ? (
+                                                            <div className="flex h-full w-full flex-col items-center justify-center bg-muted/50 text-muted-foreground p-1 text-center">
+                                                                <ImageOff className="h-4 w-4 text-muted-foreground/50" />
+                                                            </div>
+                                                        ) : (
+                                                            <img
+                                                                src={m.url || `/media/${m.id}/file`}
+                                                                alt={m.original_filename}
+                                                                onError={() => setImageErrors((prev) => ({ ...prev, [m.id]: true }))}
+                                                                className="h-full w-full object-cover"
+                                                            />
+                                                        )}
                                                     </div>
                                                 ))}
                                                 {evt.media.length > 4 && (

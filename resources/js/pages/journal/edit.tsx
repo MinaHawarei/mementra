@@ -1,6 +1,6 @@
-﻿import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { FormEvent, useRef, useState } from 'react';
-import { ImagePlus, X, ArrowLeft, Lock, MapPin, Calendar, Image as ImageIcon } from 'lucide-react';
+import { ImagePlus, X, ArrowLeft, Lock, MapPin, Calendar, Image as ImageIcon, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -49,6 +49,7 @@ export default function JournalEdit({ entry }: JournalEditProps) {
     const [bodyText, setBodyText] = useState(firstTextBlock?.content?.text ?? '');
     const [newImages, setNewImages] = useState<File[]>([]);
     const [processing, setProcessing] = useState(false);
+    const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
     const [errors, setErrors] = useState<Record<string, string>>({});
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -221,11 +222,19 @@ export default function JournalEdit({ entry }: JournalEditProps) {
                                                 key={m.id}
                                                 className="relative h-24 w-24 rounded-2xl overflow-hidden border border-border bg-muted shadow-xs"
                                             >
-                                                <img
-                                                    src={`/media/${m.id}/file`}
-                                                    alt={m.original_filename}
-                                                    className="h-full w-full object-cover"
-                                                />
+                                                {imageErrors[m.id] ? (
+                                                    <div className="flex h-full w-full flex-col items-center justify-center bg-muted/50 p-2 text-center text-muted-foreground">
+                                                        <ImageOff className="h-5 w-5 mb-1 text-muted-foreground/60" />
+                                                        <span className="text-[9px] truncate max-w-full">{m.original_filename}</span>
+                                                    </div>
+                                                ) : (
+                                                    <img
+                                                        src={`/media/${m.id}/file`}
+                                                        alt={m.original_filename}
+                                                        onError={() => setImageErrors((prev) => ({ ...prev, [m.id]: true }))}
+                                                        className="h-full w-full object-cover"
+                                                    />
+                                                )}
                                             </div>
                                         ))}
                                     </div>

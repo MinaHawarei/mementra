@@ -34,4 +34,9 @@ class MemoryMediaPolicy
     {
         return $media->user_id === $user->id;
     }
+
+    public function saveToDrive(User $user, MemoryMedia $media): bool
+    {
+        return $this->view($user, $media);
+    }
 }
