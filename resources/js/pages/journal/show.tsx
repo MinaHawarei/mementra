@@ -1,19 +1,35 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, Bell, Calendar, Edit, Lock, MapPin, Share2, Smile, Trash, X, Sparkles, Image as ImageIcon, Download, Cloud, Check, Loader2, ImageOff } from 'lucide-react';
+import {
+    ArrowLeft,
+    Bell,
+    Calendar,
+    Check,
+    Cloud,
+    Download,
+    Edit,
+    Image as ImageIcon,
+    ImageOff,
+    Loader2,
+    Lock,
+    MapPin,
+    Quote,
+    Share2,
+    Trash,
+    X,
+} from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-interface MediaItem {
-    id: number;
-    original_filename: string;
-    url?: string;
-    download_url?: string;
-    is_owner?: boolean;
-    user_id?: number;
-}
+import {
+    getBlockText,
+    getMediaDownloadUrl,
+    getMediaUrl,
+    JournalBlockItem,
+    MediaItem,
+    normalizeList,
+} from '@/lib/journal';
 
 interface ReminderItem {
     id: number;
@@ -39,10 +55,10 @@ interface JournalShowProps {
         location_name?: string;
         is_private: boolean;
         owner?: { id: number; name: string };
-        blocks?: Array<{ id: number; type: string; content?: { text?: string } }>;
-        media?: MediaItem[];
-        shares?: ShareItem[];
-        reminders?: ReminderItem[];
+        blocks?: JournalBlockItem[] | { data?: JournalBlockItem[] };
+        media?: MediaItem[] | { data?: MediaItem[] };
+        shares?: ShareItem[] | { data?: ShareItem[] };
+        reminders?: ReminderItem[] | { data?: ReminderItem[] };
     };
     partner?: { id: number; name: string } | null;
     hasGoogleDrive?: boolean;
@@ -61,12 +77,18 @@ const moodEmojis: Record<string, { emoji: string; label: string; badge: string }
 };
 
 export default function JournalShow({ entry, partner, hasGoogleDrive = false, savedMediaIds = [] }: JournalShowProps) {
+    const blocksList = normalizeList<JournalBlockItem>(entry?.blocks);
+    const mediaList = normalizeList<MediaItem>(entry?.media);
+    const remindersList = normalizeList<ReminderItem>(entry?.reminders);
+    const sharesList = normalizeList<ShareItem>(entry?.shares);
+
     const [showRememberModal, setShowRememberModal] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
     const [savingMediaId, setSavingMediaId] = useState<number | null>(null);
     const [savedList, setSavedList] = useState<number[]>(savedMediaIds);
     const [previewMedia, setPreviewMedia] = useState<MediaItem | null>(null);
     const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
+    const [mediaFallbacks, setMediaFallbacks] = useState<Record<number, boolean>>({});
     const [remindAt, setRemindAt] = useState(
         new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
     );
@@ -78,6 +100,23 @@ export default function JournalShow({ entry, partner, hasGoogleDrive = false, sa
 
     const moodKey = entry.mood ? entry.mood.toLowerCase() : '';
     const mood = moodEmojis[moodKey];
+
+    const resolveMediaSrc = (m: MediaItem): string => {
+        if (mediaFallbacks[m.id]) {
+            return `/media/${m.id}/file`;
+        }
+        return getMediaUrl(m);
+    };
+
+    const handleImageError = (mediaId: number) => {
+        if (!mediaFallbacks[mediaId]) {
+            // First failure: retry with local authenticated relative endpoint
+            setMediaFallbacks((prev) => ({ ...prev, [mediaId]: true }));
+        } else {
+            // Second failure: mark image error state
+            setImageErrors((prev) => ({ ...prev, [mediaId]: true }));
+        }
+    };
 
     const handleSaveToDrive = (media: MediaItem, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -109,7 +148,7 @@ export default function JournalShow({ entry, partner, hasGoogleDrive = false, sa
     const handleDownload = (media: MediaItem, e: React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
-        window.open(media.download_url || `/media/${media.id}/download`, '_blank');
+        window.open(getMediaDownloadUrl(media), '_blank');
     };
 
     const handleDelete = () => {
@@ -373,31 +412,84 @@ export default function JournalShow({ entry, partner, hasGoogleDrive = false, sa
                     </div>
 
                     {/* Story Content Blocks */}
-                    <div className="prose dark:prose-invert max-w-none text-base leading-relaxed space-y-4 text-foreground/90">
-                        {entry.blocks && entry.blocks.length > 0 ? (
-                            entry.blocks.map((block) => (
-                                <div key={block.id} className="whitespace-pre-wrap leading-relaxed">
-                                    {block.content?.text}
-                                </div>
-                            ))
+                    <div className="prose dark:prose-invert max-w-none text-base leading-relaxed space-y-5 text-foreground/90">
+                        {blocksList.length > 0 ? (
+                            blocksList.map((block, index) => {
+                                const blockType = block.type || 'text';
+                                const text = getBlockText(block);
+
+                                if (blockType === 'quote') {
+                                    const contentObj = (typeof block.content === 'object' && block.content !== null ? block.content : {}) as Record<string, unknown>;
+                                    const author = typeof contentObj.author === 'string' ? contentObj.author : null;
+                                    return (
+                                        <blockquote
+                                            key={block.id ?? index}
+                                            className="border-l-4 border-indigo-500 pl-4 py-2 italic my-4 bg-muted/20 rounded-r-2xl"
+                                        >
+                                            <p className="text-base font-serif leading-relaxed text-foreground">
+                                                &ldquo;{text}&rdquo;
+                                            </p>
+                                            {author && (
+                                                <cite className="block text-xs text-muted-foreground mt-1.5 not-italic font-sans">
+                                                    &mdash; {author}
+                                                </cite>
+                                            )}
+                                        </blockquote>
+                                    );
+                                }
+
+                                if (blockType === 'location') {
+                                    return (
+                                        <div
+                                            key={block.id ?? index}
+                                            className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3.5 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300"
+                                        >
+                                            <MapPin className="h-3.5 w-3.5" />
+                                            <span>{text}</span>
+                                        </div>
+                                    );
+                                }
+
+                                if (blockType === 'image') {
+                                    const contentObj = (typeof block.content === 'object' && block.content !== null ? block.content : {}) as Record<string, unknown>;
+                                    const caption = typeof contentObj.caption === 'string' ? contentObj.caption : (typeof contentObj.alt === 'string' ? contentObj.alt : text);
+                                    const imageUrl = typeof contentObj.url === 'string' ? contentObj.url : (block.id ? `/media/${block.id}/file` : '');
+
+                                    return (
+                                        <figure key={block.id ?? index} className="my-4 space-y-2">
+                                            <div className="rounded-2xl overflow-hidden border border-border bg-muted max-h-96">
+                                                <img src={imageUrl} alt={caption || 'Journal image'} className="w-full h-auto object-cover" />
+                                            </div>
+                                            {caption && <figcaption className="text-center text-xs text-muted-foreground italic">{caption}</figcaption>}
+                                        </figure>
+                                    );
+                                }
+
+                                // Default: Text Block
+                                return (
+                                    <div key={block.id ?? index} className="whitespace-pre-wrap leading-relaxed">
+                                        {text}
+                                    </div>
+                                );
+                            })
                         ) : (
                             <p className="italic text-muted-foreground text-sm">No written text recorded for this entry.</p>
                         )}
                     </div>
 
                     {/* Attached Photos Gallery */}
-                    {entry.media && entry.media.length > 0 && (
+                    {mediaList.length > 0 && (
                         <div className="border-t border-border/50 pt-6 space-y-3">
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                 <ImageIcon className="h-3.5 w-3.5 text-indigo-400" />
-                                <span>Attached Photos ({entry.media.length})</span>
+                                <span>Attached Photos ({mediaList.length})</span>
                             </h3>
                             <div className="grid gap-4 grid-cols-2 sm:grid-cols-3">
-                                {entry.media.map((m) => {
+                                {mediaList.map((m) => {
                                     const isSaved = savedList.includes(m.id);
                                     const isSaving = savingMediaId === m.id;
                                     const hasError = imageErrors[m.id];
-                                    const mediaUrl = m.url || `/media/${m.id}/file`;
+                                    const mediaUrl = resolveMediaSrc(m);
 
                                     return (
                                         <div
@@ -415,7 +507,7 @@ export default function JournalShow({ entry, partner, hasGoogleDrive = false, sa
                                                     src={mediaUrl}
                                                     alt={m.original_filename}
                                                     loading="lazy"
-                                                    onError={() => setImageErrors((prev) => ({ ...prev, [m.id]: true }))}
+                                                    onError={() => handleImageError(m.id)}
                                                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                                 />
                                             )}
@@ -467,16 +559,16 @@ export default function JournalShow({ entry, partner, hasGoogleDrive = false, sa
                     )}
 
                     {/* Active Reminders & Active Shares Lists */}
-                    {((entry.reminders && entry.reminders.length > 0) || (entry.shares && entry.shares.length > 0)) && (
+                    {(remindersList.length > 0 || sharesList.length > 0) && (
                         <div className="border-t border-border/50 pt-6 space-y-6">
-                            {entry.reminders && entry.reminders.length > 0 && (
+                            {remindersList.length > 0 && (
                                 <div className="space-y-2">
                                     <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                                         <Bell className="h-3.5 w-3.5" />
                                         <span>Active Reminders</span>
                                     </h3>
                                     <div className="space-y-1.5">
-                                        {entry.reminders.map((r) => (
+                                        {remindersList.map((r) => (
                                             <div
                                                 key={r.id}
                                                 className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 text-xs"
@@ -489,14 +581,14 @@ export default function JournalShow({ entry, partner, hasGoogleDrive = false, sa
                                 </div>
                             )}
 
-                            {entry.shares && entry.shares.length > 0 && (
+                            {sharesList.length > 0 && (
                                 <div className="space-y-2">
                                     <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                         <Share2 className="h-3.5 w-3.5 text-indigo-400" />
                                         <span>Shared Access</span>
                                     </h3>
                                     <div className="space-y-1.5">
-                                        {entry.shares.map((share) => (
+                                        {sharesList.map((share) => (
                                             <div
                                                 key={share.id}
                                                 className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 text-xs"
@@ -544,7 +636,7 @@ export default function JournalShow({ entry, partner, hasGoogleDrive = false, sa
                         </button>
 
                         <img
-                            src={previewMedia.url || `/media/${previewMedia.id}/file`}
+                            src={resolveMediaSrc(previewMedia)}
                             alt={previewMedia.original_filename}
                             className="max-h-[80vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/10"
                         />
@@ -600,4 +692,3 @@ JournalShow.layout = {
         { title: 'View Memory', href: '#' },
     ],
 };
-

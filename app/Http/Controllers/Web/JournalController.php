@@ -71,13 +71,7 @@ class JournalController extends Controller
         $partner = $relationship?->partnerFor($request->user());
 
         $journal->load(['owner', 'blocks', 'media', 'shares.targetUser', 'shares.relationship', 'reminders']);
-        $entry = (new JournalEntryResource($journal))->resolve();
-
-        foreach (['blocks', 'media', 'reminders', 'shares'] as $key) {
-            if (isset($entry[$key]['data'])) {
-                $entry[$key] = $entry[$key]['data'];
-            }
-        }
+        $entry = (new JournalEntryResource($journal))->response()->getData(true)['data'];
 
         $savedMediaIds = SavedMedia::where('user_id', $request->user()->id)
             ->whereIn('original_media_id', $journal->media->pluck('id'))
@@ -119,16 +113,7 @@ class JournalController extends Controller
 
         $journal->load(['blocks', 'media']);
 
-        $entry = (new JournalEntryResource($journal))->resolve();
-
-        // ResourceCollection wraps relations under a "data" key when resolved
-        // outside a real HTTP response. Normalize to plain arrays for Inertia.
-        if (isset($entry['blocks']['data'])) {
-            $entry['blocks'] = $entry['blocks']['data'];
-        }
-        if (isset($entry['media']['data'])) {
-            $entry['media'] = $entry['media']['data'];
-        }
+        $entry = (new JournalEntryResource($journal))->response()->getData(true)['data'];
 
         return Inertia::render('journal/edit', ['entry' => $entry]);
     }

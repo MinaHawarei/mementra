@@ -26,9 +26,16 @@ class UpdateJournalEntryRequest extends FormRequest
             'is_private' => ['nullable', 'boolean'],
             'blocks' => ['nullable', 'array'],
             'blocks.*.type' => ['required_with:blocks', 'string'],
-            'blocks.*.content_json' => ['nullable', 'array'],
+            'blocks.*.content_json' => ['nullable'],
+            'blocks.*.content' => ['nullable'],
             'images' => ['nullable', 'array'],
             'images.*' => ['file', 'image', 'max:10240'],
+            'detached_media_ids' => ['nullable', 'array'],
+            'detached_media_ids.*' => ['integer'],
+            'removed_media_ids' => ['nullable', 'array'],
+            'removed_media_ids.*' => ['integer'],
+            'keep_media_ids' => ['nullable', 'array'],
+            'keep_media_ids.*' => ['integer'],
         ];
     }
 }

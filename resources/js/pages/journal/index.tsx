@@ -1,9 +1,10 @@
-﻿import { Head, Link } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { BookOpen, Plus, Calendar, MapPin, Smile, Lock, Search, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { getBlockText, JournalBlockItem, normalizeList } from '@/lib/journal';
 
 interface JournalIndexProps {
     entries: {
@@ -14,7 +15,7 @@ interface JournalIndexProps {
             mood?: string;
             location_name?: string;
             is_private: boolean;
-            blocks?: Array<{ id: number; type: string; content?: { text?: string } }>;
+            blocks?: JournalBlockItem[] | { data?: JournalBlockItem[] };
         }>;
     };
 }
@@ -33,12 +34,14 @@ const moodEmojis: Record<string, { emoji: string; label: string; border: string;
 export default function JournalIndex({ entries }: JournalIndexProps) {
     const [search, setSearch] = useState('');
 
-    const filteredEntries = entries.data.filter((entry) => {
+    const filteredEntries = (entries?.data ?? []).filter((entry) => {
         const query = search.toLowerCase();
         const titleMatch = entry.title?.toLowerCase().includes(query);
         const locationMatch = entry.location_name?.toLowerCase().includes(query);
-        const textBlock = entry.blocks?.find((b) => b.type === 'text');
-        const textMatch = textBlock?.content?.text?.toLowerCase().includes(query);
+        const blocksList = normalizeList<JournalBlockItem>(entry.blocks);
+        const textBlock = blocksList.find((b) => !b.type || b.type === 'text');
+        const textContent = getBlockText(textBlock);
+        const textMatch = textContent.toLowerCase().includes(query);
         return titleMatch || locationMatch || textMatch;
     });
 
@@ -101,8 +104,9 @@ export default function JournalIndex({ entries }: JournalIndexProps) {
                         {filteredEntries.map((entry) => {
                             const moodKey = entry.mood ? entry.mood.toLowerCase() : '';
                             const mood = moodEmojis[moodKey];
-                            const firstTextBlock = entry.blocks?.find((b) => b.type === 'text');
-                            const excerpt = firstTextBlock?.content?.text ?? '';
+                            const blocksList = normalizeList<JournalBlockItem>(entry.blocks);
+                            const firstTextBlock = blocksList.find((b) => !b.type || b.type === 'text');
+                            const excerpt = getBlockText(firstTextBlock);
 
                             return (
                                 <Card

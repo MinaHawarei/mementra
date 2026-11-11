@@ -1,16 +1,29 @@
 import { Head, Link, router } from '@inertiajs/react';
+import {
+    ArrowLeft,
+    Calendar,
+    Image as ImageIcon,
+    ImageOff,
+    ImagePlus,
+    Lock,
+    MapPin,
+    RotateCcw,
+    Trash2,
+    X,
+} from 'lucide-react';
 import { FormEvent, useRef, useState } from 'react';
-import { ImagePlus, X, ArrowLeft, Lock, MapPin, Calendar, Image as ImageIcon, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-
-interface ExistingMedia {
-    id: number;
-    original_filename: string;
-}
+import {
+    getBlockText,
+    getMediaUrl,
+    JournalBlockItem,
+    MediaItem,
+    normalizeList,
+} from '@/lib/journal';
 
 interface JournalEditProps {
     entry: {
@@ -20,8 +33,8 @@ interface JournalEditProps {
         location_name?: string;
         mood?: string;
         is_private: boolean;
-        blocks?: Array<{ id: number; type: string; content?: { text?: string } }>;
-        media?: ExistingMedia[];
+        blocks?: JournalBlockItem[] | { data?: JournalBlockItem[] };
+        media?: MediaItem[] | { data?: MediaItem[] };
     };
 }
 
@@ -37,29 +50,89 @@ const moodOptions = [
 ];
 
 export default function JournalEdit({ entry }: JournalEditProps) {
-    // Safe blocks extraction
-    const blocksList = Array.isArray(entry?.blocks) ? entry.blocks : [];
-    const firstTextBlock = blocksList.find((b) => b.type === 'text');
+    // Normalize blocks and existing media
+    const rawBlocks = normalizeList<JournalBlockItem>(entry?.blocks);
+    const initialExistingMedia = normalizeList<MediaItem>(entry?.media);
+
+    // Extract initial text from existing text blocks
+    const initialBodyText = rawBlocks
+        .filter((b) => !b.type || b.type === 'text')
+        .map((b) => getBlockText(b))
+        .filter(Boolean)
+        .join('\n\n');
 
     const [title, setTitle] = useState(entry?.title ?? '');
     const [entryDate, setEntryDate] = useState(entry?.entry_date ?? '');
     const [locationName, setLocationName] = useState(entry?.location_name ?? '');
     const [mood, setMood] = useState(entry?.mood ? entry.mood.toLowerCase() : 'happy');
     const [isPrivate, setIsPrivate] = useState(Boolean(entry?.is_private));
-    const [bodyText, setBodyText] = useState(firstTextBlock?.content?.text ?? '');
+    const [bodyText, setBodyText] = useState(initialBodyText);
+
+    // Existing media state & detachment tracking
+    const [existingMedia, setExistingMedia] = useState<MediaItem[]>(initialExistingMedia);
+    const [detachedMediaIds, setDetachedMediaIds] = useState<number[]>([]);
+
+    // New images staging
     const [newImages, setNewImages] = useState<File[]>([]);
-    const [processing, setProcessing] = useState(false);
     const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
+    const [mediaFallbacks, setMediaFallbacks] = useState<Record<number, boolean>>({});
+    const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const resolveMediaSrc = (m: MediaItem): string => {
+        if (mediaFallbacks[m.id]) {
+            return `/media/${m.id}/file`;
+        }
+        return getMediaUrl(m);
+    };
+
+    const handleImageError = (mediaId: number) => {
+        if (!mediaFallbacks[mediaId]) {
+            setMediaFallbacks((prev) => ({ ...prev, [mediaId]: true }));
+        } else {
+            setImageErrors((prev) => ({ ...prev, [mediaId]: true }));
+        }
+    };
+
     const addImages = (files: FileList | null) => {
         if (!files) return;
-        setNewImages((prev) => [...prev, ...Array.from(files)]);
+        const incoming = Array.from(files);
+
+        // Deduplication: prevent staging identical files already in newImages or existingMedia
+        const deduplicated = incoming.filter((file) => {
+            const alreadyInNew = newImages.some(
+                (existingFile) => existingFile.name === file.name && existingFile.size === file.size
+            );
+            const alreadyInExisting = existingMedia.some(
+                (m) => m.original_filename === file.name && (m.size_bytes === undefined || m.size_bytes === file.size)
+            );
+            return !alreadyInNew && !alreadyInExisting;
+        });
+
+        if (deduplicated.length > 0) {
+            setNewImages((prev) => [...prev, ...deduplicated]);
+        }
     };
 
     const removeNewImage = (index: number) => {
         setNewImages((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    const removeExistingMedia = (mediaId: number) => {
+        const itemToRemove = existingMedia.find((m) => m.id === mediaId);
+        if (!itemToRemove) return;
+
+        setExistingMedia((prev) => prev.filter((m) => m.id !== mediaId));
+        setDetachedMediaIds((prev) => (prev.includes(mediaId) ? prev : [...prev, mediaId]));
+    };
+
+    const undoRemoveExistingMedia = (mediaId: number) => {
+        const originalItem = initialExistingMedia.find((m) => m.id === mediaId);
+        if (!originalItem) return;
+
+        setDetachedMediaIds((prev) => prev.filter((id) => id !== mediaId));
+        setExistingMedia((prev) => [...prev, originalItem]);
     };
 
     const handleSubmit = (e: FormEvent) => {
@@ -73,9 +146,22 @@ export default function JournalEdit({ entry }: JournalEditProps) {
         formData.append('location_name', locationName);
         formData.append('mood', mood);
         formData.append('is_private', isPrivate ? '1' : '0');
+
+        // Body text as primary text block
         formData.append('blocks[0][type]', 'text');
         formData.append('blocks[0][content_json][text]', bodyText);
 
+        // Detached media IDs (will have journal_entry_id set to null without deleting Google Drive file)
+        detachedMediaIds.forEach((id, i) => {
+            formData.append(`detached_media_ids[${i}]`, String(id));
+        });
+
+        // Kept media IDs for explicit retention
+        existingMedia.forEach((m, i) => {
+            formData.append(`keep_media_ids[${i}]`, String(m.id));
+        });
+
+        // New images to upload and attach
         newImages.forEach((file, i) => {
             formData.append(`images[${i}]`, file);
         });
@@ -112,7 +198,9 @@ export default function JournalEdit({ entry }: JournalEditProps) {
                 <Card className="border-border/80 bg-card shadow-xs">
                     <CardHeader className="pb-4 border-b border-border/50">
                         <CardTitle className="text-base font-bold">Memory Information</CardTitle>
-                        <CardDescription className="text-xs">Saved changes will update in your living timeline immediately.</CardDescription>
+                        <CardDescription className="text-xs">
+                            Saved changes will update in your living timeline immediately.
+                        </CardDescription>
                     </CardHeader>
 
                     <CardContent className="pt-6">
@@ -201,6 +289,7 @@ export default function JournalEdit({ entry }: JournalEditProps) {
                                     rows={9}
                                     value={bodyText}
                                     onChange={(e) => setBodyText(e.target.value)}
+                                    placeholder="Write your story and memories here..."
                                     className="resize-y text-sm leading-relaxed rounded-xl p-4"
                                     required
                                 />
@@ -209,35 +298,94 @@ export default function JournalEdit({ entry }: JournalEditProps) {
                                 )}
                             </div>
 
-                            {/* Existing Media Section */}
-                            {entry.media && entry.media.length > 0 && (
+                            {/* Existing Attached Media Section */}
+                            {initialExistingMedia.length > 0 && (
                                 <div className="space-y-3 border-t border-border/50 pt-5">
-                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                        <ImageIcon className="h-3.5 w-3.5 text-indigo-400" />
-                                        <span>Existing Photos ({entry.media.length})</span>
-                                    </Label>
-                                    <div className="flex flex-wrap gap-3">
-                                        {entry.media.map((m) => (
-                                            <div
-                                                key={m.id}
-                                                className="relative h-24 w-24 rounded-2xl overflow-hidden border border-border bg-muted shadow-xs"
-                                            >
-                                                {imageErrors[m.id] ? (
-                                                    <div className="flex h-full w-full flex-col items-center justify-center bg-muted/50 p-2 text-center text-muted-foreground">
-                                                        <ImageOff className="h-5 w-5 mb-1 text-muted-foreground/60" />
-                                                        <span className="text-[9px] truncate max-w-full">{m.original_filename}</span>
-                                                    </div>
-                                                ) : (
-                                                    <img
-                                                        src={`/media/${m.id}/file`}
-                                                        alt={m.original_filename}
-                                                        onError={() => setImageErrors((prev) => ({ ...prev, [m.id]: true }))}
-                                                        className="h-full w-full object-cover"
-                                                    />
-                                                )}
-                                            </div>
-                                        ))}
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                            <ImageIcon className="h-3.5 w-3.5 text-indigo-400" />
+                                            <span>Attached Photos ({existingMedia.length})</span>
+                                        </Label>
+                                        <span className="text-[11px] text-muted-foreground">
+                                            Removing photos detaches them from this memory and keeps them safe in your Photo Gallery.
+                                        </span>
                                     </div>
+
+                                    {existingMedia.length > 0 ? (
+                                        <div className="flex flex-wrap gap-3">
+                                            {existingMedia.map((m) => (
+                                                <div
+                                                    key={m.id}
+                                                    className="group relative h-28 w-28 rounded-2xl overflow-hidden border border-border bg-muted shadow-xs transition-all"
+                                                >
+                                                    {imageErrors[m.id] ? (
+                                                        <div className="flex h-full w-full flex-col items-center justify-center bg-muted/50 p-2 text-center text-muted-foreground">
+                                                            <ImageOff className="h-5 w-5 mb-1 text-muted-foreground/60" />
+                                                            <span className="text-[9px] truncate max-w-full">{m.original_filename}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <img
+                                                            src={resolveMediaSrc(m)}
+                                                            alt={m.original_filename}
+                                                            onError={() => handleImageError(m.id)}
+                                                            className="h-full w-full object-cover"
+                                                        />
+                                                    )}
+
+                                                    {/* Remove Button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeExistingMedia(m.id)}
+                                                        title="Detach photo from this memory"
+                                                        className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/75 hover:bg-destructive text-white flex items-center justify-center transition-all shadow-md active:scale-90"
+                                                    >
+                                                        <X className="h-3.5 w-3.5" />
+                                                    </button>
+
+                                                    <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-0.5 text-white text-[9px] truncate text-center">
+                                                        {m.original_filename}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground italic">
+                                            All previously attached photos have been marked for detachment.
+                                        </p>
+                                    )}
+
+                                    {/* Detached Media Recovery List */}
+                                    {detachedMediaIds.length > 0 && (
+                                        <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-2 mt-2">
+                                            <div className="text-[11px] font-medium text-muted-foreground flex items-center justify-between">
+                                                <span>Detached photos ({detachedMediaIds.length}) &mdash; will be detached upon save:</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {detachedMediaIds.map((id) => {
+                                                    const original = initialExistingMedia.find((m) => m.id === id);
+                                                    return (
+                                                        <div
+                                                            key={id}
+                                                            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground"
+                                                        >
+                                                            <span className="truncate max-w-[140px] text-[11px]">
+                                                                {original?.original_filename ?? `Photo #${id}`}
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => undoRemoveExistingMedia(id)}
+                                                                className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 text-[11px] font-medium"
+                                                                title="Restore photo to memory"
+                                                            >
+                                                                <RotateCcw className="h-3 w-3" />
+                                                                <span>Restore</span>
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -248,7 +396,10 @@ export default function JournalEdit({ entry }: JournalEditProps) {
                                 </Label>
                                 <div className="flex flex-wrap gap-3">
                                     {newImages.map((file, index) => (
-                                        <div key={index} className="relative h-24 w-24 rounded-2xl overflow-hidden border border-border bg-muted group shadow-xs">
+                                        <div
+                                            key={index}
+                                            className="group relative h-28 w-28 rounded-2xl overflow-hidden border border-border bg-muted shadow-xs"
+                                        >
                                             <img
                                                 src={URL.createObjectURL(file)}
                                                 alt={file.name}
@@ -257,17 +408,21 @@ export default function JournalEdit({ entry }: JournalEditProps) {
                                             <button
                                                 type="button"
                                                 onClick={() => removeNewImage(index)}
-                                                className="absolute top-1 right-1 rounded-full bg-black/70 p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                                title="Remove this photo"
+                                                className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/75 hover:bg-destructive text-white flex items-center justify-center transition-all shadow-md active:scale-90"
                                             >
-                                                <X className="h-3 w-3" />
+                                                <X className="h-3.5 w-3.5" />
                                             </button>
+                                            <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-0.5 text-white text-[9px] truncate text-center">
+                                                {file.name}
+                                            </div>
                                         </div>
                                     ))}
 
                                     <button
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="flex h-24 w-24 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-border text-muted-foreground hover:border-indigo-500/50 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-500/5 transition-all"
+                                        className="flex h-28 w-28 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-border text-muted-foreground hover:border-indigo-500/50 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-500/5 transition-all"
                                     >
                                         <ImagePlus className="h-5 w-5" />
                                         <span className="text-[10px] font-medium">Add Photo</span>
