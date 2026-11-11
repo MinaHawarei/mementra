@@ -24,6 +24,7 @@ Route::middleware(['auth', 'throttle:60,1'])->prefix('v1')->as('api.v1.')->group
     Route::post('relationships', [RelationshipController::class, 'store']);
     Route::post('relationships/{relationship}/accept', [RelationshipController::class, 'accept']);
     Route::post('relationships/{relationship}/decline', [RelationshipController::class, 'decline']);
+    Route::post('relationships/{relationship}/cancel', [RelationshipController::class, 'cancel']);
     Route::post('relationships/{relationship}/end', [RelationshipController::class, 'end']);
 
     Route::apiResource('events', EventController::class)->except(['update']);

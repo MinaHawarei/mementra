@@ -11,8 +11,9 @@ interface DashboardProps {
         type: string;
         status: string;
         connected_at?: string;
-        members: Array<{ id: number; name: string; email: string }>;
-    };
+        partner?: { id: number; name: string; email: string };
+        members?: Array<{ id: number; name: string; email: string }> | { data?: Array<{ id: number; name: string; email: string }> };
+    } | null;
     recentEntries: Array<{
         id: number;
         title: string;
@@ -79,7 +80,15 @@ export default function Dashboard({
                             </h1>
                             <p className="text-sm text-muted-foreground max-w-xl">
                                 {relationship
-                                    ? `Connected with ${relationship.members?.find((m) => m.name !== auth?.user?.name)?.name ?? 'your partner'}. Every moment recorded is a treasure preserved.`
+                                    ? `Connected with ${
+                                          relationship.partner?.name ??
+                                          (Array.isArray(relationship.members)
+                                              ? relationship.members.find((m) => m.name !== auth?.user?.name)?.name
+                                              : Array.isArray((relationship.members as any)?.data)
+                                                ? (relationship.members as any).data.find((m: any) => m.name !== auth?.user?.name)?.name
+                                                : null) ??
+                                          'your partner'
+                                      }. Every moment recorded is a treasure preserved.`
                                     : 'A quiet space to record your thoughts, celebrate milestones, and preserve what matters most.'}
                             </p>
                         </div>

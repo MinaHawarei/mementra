@@ -51,6 +51,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('relationship', [RelationshipController::class, 'index'])->name('relationship.index');
     Route::post('relationship', [RelationshipController::class, 'store'])->name('relationship.store');
     Route::post('relationship/{relationship}/accept', [RelationshipController::class, 'accept'])->name('relationship.accept');
+    Route::post('relationship/{relationship}/decline', [RelationshipController::class, 'decline'])->name('relationship.decline');
+    Route::post('relationship/{relationship}/cancel', [RelationshipController::class, 'cancel'])->name('relationship.cancel');
     Route::post('relationship/{relationship}/end', [RelationshipController::class, 'end'])->name('relationship.end');
 
     Route::patch('settings/preferences', [UserSettingsController::class, 'updatePreferences'])->name('settings.preferences.update');

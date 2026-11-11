@@ -24,7 +24,7 @@ class RelationshipController extends Controller
     {
         $relationships = $request->user()
             ->relationships()
-            ->with('members')
+            ->with(['members', 'creator'])
             ->orderByDesc('created_at')
             ->get();
 
@@ -33,6 +33,8 @@ class RelationshipController extends Controller
 
     public function store(StoreRelationshipRequest $request): JsonResponse
     {
+        $this->authorize('create', Relationship::class);
+
         $partner = User::where('email', $request->validated('partner_email'))->firstOrFail();
         $type = RelationshipType::tryFrom($request->validated('type') ?? '') ?? RelationshipType::Couple;
 
@@ -50,18 +52,27 @@ class RelationshipController extends Controller
 
     public function accept(Relationship $relationship): RelationshipResource
     {
-        $this->authorize('update', $relationship);
+        $this->authorize('accept', $relationship);
 
-        $this->service->acceptConnection($relationship);
+        $this->service->acceptConnection($relationship, request()->user());
 
         return new RelationshipResource($relationship->fresh('members'));
     }
 
     public function decline(Relationship $relationship): RelationshipResource
     {
-        $this->authorize('update', $relationship);
+        $this->authorize('decline', $relationship);
 
         $this->service->declineConnection($relationship);
+
+        return new RelationshipResource($relationship->fresh('members'));
+    }
+
+    public function cancel(Relationship $relationship): RelationshipResource
+    {
+        $this->authorize('cancel', $relationship);
+
+        $this->service->cancelConnection($relationship);
 
         return new RelationshipResource($relationship->fresh('members'));
     }

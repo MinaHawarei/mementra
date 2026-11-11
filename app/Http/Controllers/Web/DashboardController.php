@@ -22,7 +22,7 @@ class DashboardController extends Controller
         $user = $request->user();
 
         $activeRelationship = $user->relationships()
-            ->with('members')
+            ->with(['members', 'creator'])
             ->where('status', RelationshipStatus::Active)
             ->first();
 
@@ -46,10 +46,10 @@ class DashboardController extends Controller
             ->get();
 
         return Inertia::render('dashboard', [
-            'relationship' => $activeRelationship ? new RelationshipResource($activeRelationship) : null,
-            'recentEntries' => JournalEntryResource::collection($recentEntries)->resolve(),
-            'upcomingEvents' => EventResource::collection($upcomingEvents)->resolve(),
-            'upcomingReminders' => ReminderResource::collection($upcomingReminders)->resolve(),
+            'relationship' => $activeRelationship ? (new RelationshipResource($activeRelationship))->response()->getData(true)['data'] : null,
+            'recentEntries' => JournalEntryResource::collection($recentEntries)->response()->getData(true)['data'],
+            'upcomingEvents' => EventResource::collection($upcomingEvents)->response()->getData(true)['data'],
+            'upcomingReminders' => ReminderResource::collection($upcomingReminders)->response()->getData(true)['data'],
         ]);
     }
 }
